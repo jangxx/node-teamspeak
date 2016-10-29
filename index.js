@@ -21,7 +21,7 @@ function TeamSpeakClient(host, port){
 		status =    -2,
 		queue =     [],
 		executing = null;
-	
+
 	function tsescape(s){
 		var r = String(s);
 		r = r.replace(/\\/g, "\\\\");   // Backslash
@@ -35,7 +35,7 @@ function TeamSpeakClient(host, port){
 		r = r.replace(/ /g,  "\\s");    // Whitespace
 		return r;
 	}
-	
+
 	function tsunescape(s){
 		var r = String(s);
 		r = r.replace(/\\s/g,  " ");	// Whitespace
@@ -49,18 +49,18 @@ function TeamSpeakClient(host, port){
 		r = r.replace(/\\\\/g, "\\");   // Backslash
 		return r;
 	}
-	
+
 	function checkQueue(){
 		if(!executing && queue.length >= 1){
 			executing = queue.shift();
 			socket.write(executing.text + "\n");
 		}
 	}
-	
+
 	function parseResponse(s){
 		var response = [];
 		var records = s.split("|");
-		
+
 		response = records.map(function(k){
 			var args = k.split(" ");
 			var thisrec = {};
@@ -74,23 +74,23 @@ function TeamSpeakClient(host, port){
 			});
 			return thisrec;
 		});
-		
+
 		if(response.length === 0){
 			response = null;
 		} else if(response.length === 1){
 			response = response.shift();
 		}
-		
+
 		return response;
 	}
-	
+
 	// Return pending commands that are going to be sent to the server.
 	// Note that they have been parsed - Access getPending()[0].text to get
 	// the full text representation of the command.
 	TeamSpeakClient.prototype.getPending = function(){
 		return queue.slice(0);
 	};
-	
+
 	// Clear the queue of pending commands so that any command that is currently queued won't be executed.
 	// The old queue is returned.
 	TeamSpeakClient.prototype.clearPending = function(){
@@ -98,7 +98,7 @@ function TeamSpeakClient(host, port){
 		queue = [];
 		return q;
 	};
-	
+
 	// Send a command to the server
 	TeamSpeakClient.prototype.send = function(){
 		var args = Array.prototype.slice.call(arguments);
@@ -122,7 +122,7 @@ function TeamSpeakClient(host, port){
 			var v = params[k];
 			if(util.isArray(v)){ // Multiple values for the same key - concatenate all
 				var doptions = v.map(function(val){
-					return tsescape(k) + "=" + tsescape(val); 
+					return tsescape(k) + "=" + tsescape(val);
 				});
 				tosend += " " + doptions.join("|");
 			} else {
@@ -140,20 +140,25 @@ function TeamSpeakClient(host, port){
 			self.emit("timeout");
 		});
 	};
-	
+
+	TeamSpeakClient.prototype.end = function() {
+		socket.end();
+		self.emit("close", queue);
+	}
+
 	socket.on("error", function(err){
 		self.emit("error", err);
 	});
-	
+
 	socket.on("close", function(){
 		self.emit("close", queue);
 	});
-	
+
 	socket.on("connect", function(){
 		reader = LineInputStream(socket);
 		reader.on("line", function(line){
 			var s = line.trim();
-			// Ignore two first lines sent by server ("TS3" and information message) 
+			// Ignore two first lines sent by server ("TS3" and information message)
 			if(status < 0){
 				status++;
 				if(status === 0) checkQueue();
@@ -176,13 +181,13 @@ function TeamSpeakClient(host, port){
 				response = parseResponse(s);
 				self.emit(s.substr(0, s.indexOf(" ")), response);
 			} else if(executing) {
-				response = parseResponse(s); 
+				response = parseResponse(s);
 				executing.rawResponse = s;
 				executing.response = response;
 			}
 		});
 		self.emit("connect");
-	}); 
+	});
 }
 
 util.inherits(TeamSpeakClient, events.EventEmitter);
